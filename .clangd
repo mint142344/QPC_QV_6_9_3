@@ -1,0 +1,20 @@
+CompileFlags:
+    Add:
+        - -DUSE_STDPERIPH_DRIVER
+        - -DSTM32F10X_MD
+        - -IC:/Keil_v5/ARM/ARMCC/include
+        - -ferror-limit=0
+    Remove:
+        - --apcs=interwork
+        - --cpu
+        - --li
+        - --c99
+        - --split_sections
+        - --diag_suppress=1
+        - --diag_suppress=1295
+        - --no_depend_system_headers
+        - --depend
+        - --dsb
+    CompilationDatabase: ./build/Debug
+Diagnostics:
+    Suppress: "*"
