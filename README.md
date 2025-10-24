@@ -38,6 +38,14 @@ typedef struct {
     uint8_t poolId_;          /*!< 所属事件池 ID（静态事件为 0）*/
     uint8_t volatile refCtr_; /*!< 引用计数器 */
 } QEvt;
+
+// 修改目标状态为target
+#define Q_TRAN(target_)  \
+    ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(target_), (QState)Q_RET_TRAN)
+
+// 修改目标状态为super
+#define Q_SUPER(super_)  \
+    ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(super_), (QState)Q_RET_SUPER)
 ```
 
 - `poolId_` 为0表示静态事件，此时`refCtr_`不用于引用计数
@@ -241,6 +249,8 @@ void QF_deleteRef_(void const *const evtRef);
 #define Q_DELETE_REF(evtRef_)
 ```
 
+
+
 ### qmpool.h
 
 ```c
@@ -353,6 +363,307 @@ void QV_onIdle(void);
 
 ## src
 
+### qep_hsm.c
+
+```c
+// 保留事件
+static QEvt const QEP_reservedEvt_[] = {
+    { (QSignal)QEP_EMPTY_SIG_, 0U, 0U },
+    { (QSignal)Q_ENTRY_SIG,    0U, 0U },
+    { (QSignal)Q_EXIT_SIG,     0U, 0U },
+    { (QSignal)Q_INIT_SIG,     0U, 0U }
+};
+
+/** 在一个状态转换函数中执行 保留事件动作
+ *	QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_)
+ *	QEP_TRIG_(t, Q_INIT_SIG)
+ */
+#define QEP_TRIG_(state_, sig_)	((*(state_))(me, &QEP_reservedEvt_[(sig_)]))
+
+// 状态处理函数执行退出动作Q_EXIT_SIG
+#define QEP_EXIT_(state_, qs_id_)	QEP_TRIG_(state_, Q_EXIT_SIG)
+
+// 状态处理函数执行进入动作Q_ENTRY_SIG
+#define QEP_ENTER_(state_, qs_id_)	QEP_TRIG_(state_, Q_ENTRY_SIG) 
+```
+
+```c
+void QHsm_ctor(QHsm * const me, QStateHandler initial) {
+     /* QHsm virtual table */
+    static struct QHsmVtable const vtable = {
+        &QHsm_init_,
+        &QHsm_dispatch_
+    };
+    me->vptr      = &vtable;
+    me->state.fun = Q_STATE_CAST(&QHsm_top);
+    me->temp.fun  = initial;
+}
+
+// 最顶层初始转换 QHsm_top → MyState_Initial → MyState_Active
+void QHsm_init_(QHsm * const me, void const * const e)
+{
+    QStateHandler t = me->state.fun;
+    QState r;
+
+    /** @pre the virtual pointer must be initialized, the top-most initial
+    * transition must be initialized, and the initial transition must not
+    * be taken yet.
+    */
+    Q_REQUIRE_ID(200, (me->vptr != (struct QHsmVtable *)0)
+                      && (me->temp.fun != Q_STATE_CAST(0))
+                      && (t == Q_STATE_CAST(&QHsm_top)));
+
+    /* execute the top-most initial tran. */
+    r = (*me->temp.fun)(me, Q_EVT_CAST(QEvt));
+
+    /* the top-most initial transition must be taken */
+    Q_ASSERT_ID(210, r == (QState)Q_RET_TRAN);
+
+    /* drill down into the state hierarchy with initial transitions... */
+    do {
+        QStateHandler path[QHSM_MAX_NEST_DEPTH_]; /* tran entry path array */
+        int_fast8_t ip = 0; /* tran entry path index */
+
+        path[0] = me->temp.fun;
+        (void)QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_);
+        while (me->temp.fun != t) {
+            ++ip;
+            Q_ASSERT_ID(220, ip < (int_fast8_t)Q_DIM(path));
+            path[ip] = me->temp.fun;
+            (void)QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_);
+        }
+        me->temp.fun = path[0];
+
+        /* retrace the entry path in reverse (desired) order... */
+        do {
+            QEP_ENTER_(path[ip], qs_id); /* enter path[ip] */
+            --ip;
+        } while (ip >= 0);
+
+        t = path[0]; /* current state becomes the new source */
+
+        r = QEP_TRIG_(t, Q_INIT_SIG); /* execute initial transition */
+
+    } while (r == (QState)Q_RET_TRAN);
+
+    me->state.fun = t; /* change the current active state */
+    me->temp.fun  = t; /* mark the configuration as stable */
+}
+
+QState QHsm_top(void const * const me, QEvt const * const e) {
+    (void)me;
+    (void)e; 
+    return (QState)Q_RET_IGNORED; /* the top state ignores all events */
+}
+
+void QHsm_dispatch_(QHsm * const me, QEvt const * const e) {
+    QStateHandler t = me->state.fun;
+    QStateHandler s;
+    QState r;
+
+    /** @pre the current state must be initialized and
+    * the state configuration must be stable
+    */
+    Q_REQUIRE_ID(400, (t != Q_STATE_CAST(0))
+                       && (t == me->temp.fun));
+
+    /* process the event hierarchically... */
+    do {
+        s = me->temp.fun;
+        r = (*s)(me, e); /* invoke state handler s */
+
+        if (r == (QState)Q_RET_UNHANDLED) { /* unhandled due to a guard? */
+            r = QEP_TRIG_(s, QEP_EMPTY_SIG_); /* find superstate of s */
+        }
+    } while (r == (QState)Q_RET_SUPER);
+
+    /* transition taken? */
+    if (r >= (QState)Q_RET_TRAN) {
+        QStateHandler path[QHSM_MAX_NEST_DEPTH_];
+        int_fast8_t ip;
+
+        path[0] = me->temp.fun; /* save the target of the transition */
+        path[1] = t;
+        path[2] = s;
+
+        /* exit current state to transition source s... */
+        for (; t != s; t = me->temp.fun) {
+            if (QEP_TRIG_(t, Q_EXIT_SIG) == (QState)Q_RET_HANDLED) {
+                (void)QEP_TRIG_(t, QEP_EMPTY_SIG_); /* find superstate of t */
+            }
+        }
+
+        ip = QHsm_tran_(me, path);
+
+        /* retrace the entry path in reverse (desired) order... */
+        for (; ip >= 0; --ip) {
+            QEP_ENTER_(path[ip], qs_id);  /* enter path[ip] */
+        }
+
+        t = path[0];      /* stick the target into register */
+        me->temp.fun = t; /* update the next state */
+
+        /* drill into the target hierarchy... */
+        while (QEP_TRIG_(t, Q_INIT_SIG) == (QState)Q_RET_TRAN) {
+            ip = 0;
+            path[0] = me->temp.fun;
+
+            (void)QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_);/*find superstate */
+
+            while (me->temp.fun != t) {
+                ++ip;
+                path[ip] = me->temp.fun;
+                (void)QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_);/* find super */
+            }
+            me->temp.fun = path[0];
+
+            /* entry path must not overflow */
+            Q_ASSERT_ID(410, ip < QHSM_MAX_NEST_DEPTH_);
+
+            /* retrace the entry path in reverse (correct) order... */
+            do {
+                QEP_ENTER_(path[ip], qs_id); /* enter path[ip] */
+                --ip;
+            } while (ip >= 0);
+
+            t = path[0]; /* current state becomes the new source */
+        }
+    }
+
+    me->state.fun = t; /* change the current active state */
+    me->temp.fun  = t; /* mark the configuration as stable */
+}
+
+// LCA 最近公共祖先
+static int_fast8_t QHsm_tran_(QHsm * const me, QStateHandler path[QHSM_MAX_NEST_DEPTH_]) {
+    int_fast8_t ip = -1; /* transition entry path index */
+    int_fast8_t iq; /* helper transition entry path index */
+    QStateHandler t = path[0];
+    QStateHandler const s = path[2];
+    QState r;
+
+    /* (a) check source==target (transition to self)... */
+    if (s == t) {
+        QEP_EXIT_(s, qs_id); /* exit the source */
+        ip = 0; /* enter the target */
+    }
+    else {
+        (void)QEP_TRIG_(t, QEP_EMPTY_SIG_); /* find superstate of target */
+
+        t = me->temp.fun;
+
+        /* (b) check source==target->super... */
+        if (s == t) {
+            ip = 0; /* enter the target */
+        }
+        else {
+            (void)QEP_TRIG_(s, QEP_EMPTY_SIG_); /* find superstate of src */
+
+            /* (c) check source->super==target->super... */
+            if (me->temp.fun == t) {
+                QEP_EXIT_(s, qs_id); /* exit the source */
+                ip = 0; /* enter the target */
+            }
+            else {
+                /* (d) check source->super==target... */
+                if (me->temp.fun == path[0]) {
+                    QEP_EXIT_(s, qs_id); /* exit the source */
+                }
+                else {
+                    /* (e) check rest of source==target->super->super..
+                    * and store the entry path along the way
+                    */
+                    iq = 0; /* indicate that LCA not found */
+                    ip = 1; /* enter target and its superstate */
+                    path[1] = t;      /* save the superstate of target */
+                    t = me->temp.fun; /* save source->super */
+
+                    /* find target->super->super... */
+                    r = QEP_TRIG_(path[1], QEP_EMPTY_SIG_);
+                    while (r == (QState)Q_RET_SUPER) {
+                        ++ip;
+                        path[ip] = me->temp.fun; /* store the entry path */
+                        if (me->temp.fun == s) { /* is it the source? */
+                            iq = 1; /* indicate that LCA found */
+
+                            /* entry path must not overflow */
+                            Q_ASSERT_ID(510,
+                                ip < QHSM_MAX_NEST_DEPTH_);
+                            --ip; /* do not enter the source */
+                            r = (QState)Q_RET_HANDLED; /* terminate loop */
+                        }
+                         /* it is not the source, keep going up */
+                        else {
+                            r = QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_);
+                        }
+                    }
+
+                    /* the LCA not found yet? */
+                    if (iq == 0) {
+
+                        /* entry path must not overflow */
+                        Q_ASSERT_ID(520, ip < QHSM_MAX_NEST_DEPTH_);
+
+                        QEP_EXIT_(s, qs_id); /* exit the source */
+
+                        /* (f) check the rest of source->super
+                        *                  == target->super->super...
+                        */
+                        iq = ip;
+                        r = (QState)Q_RET_IGNORED; /* LCA NOT found */
+                        do {
+                            if (t == path[iq]) { /* is this the LCA? */
+                                r = (QState)Q_RET_HANDLED; /* LCA found */
+                                ip = iq - 1; /* do not enter LCA */
+                                iq = -1; /* cause termintion of the loop */
+                            }
+                            else {
+                                --iq; /* try lower superstate of target */
+                            }
+                        } while (iq >= 0);
+
+                        /* LCA not found? */
+                        if (r != (QState)Q_RET_HANDLED) {
+                            /* (g) check each source->super->...
+                            * for each target->super...
+                            */
+                            r = (QState)Q_RET_IGNORED; /* keep looping */
+                            do {
+                                /* exit t unhandled? */
+                                if (QEP_TRIG_(t, Q_EXIT_SIG)
+                                    == (QState)Q_RET_HANDLED)
+                                {
+
+                                    (void)QEP_TRIG_(t, QEP_EMPTY_SIG_);
+                                }
+                                t = me->temp.fun; /* set to super of t */
+                                iq = ip;
+                                do {
+                                    /* is this LCA? */
+                                    if (t == path[iq]) {
+                                        /* do not enter LCA */
+                                        ip = (int_fast8_t)(iq - 1);
+                                        iq = -1; /* break out of inner loop */
+                                        /* break out of outer loop */
+                                        r = (QState)Q_RET_HANDLED;
+                                    }
+                                    else {
+                                        --iq;
+                                    }
+                                } while (iq >= 0);
+                            } while (r != (QState)Q_RET_HANDLED);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return ip;
+}
+```
+
+>  状态配置稳定：me->temp.fun == me->state.fun
+
 ### qv.c
 
 **QF_Init** 内部调用了 **QV_INIT**
@@ -371,4 +682,36 @@ void QV_onIdle(void);
 
 ### qf_time.c
 
+```c
+// 启动定时器
+void QTimeEvt_armX(QTimeEvt * const me,
+                   QTimeEvtCtr const nTicks, QTimeEvtCtr const interval);
+```
+
 时间事件QTimEvt 是静态事件
+
+# NOTE
+
+1. 状态处理函数中初始化 `QState status = Q_HANDLED();`，以防信号处理后未初始化status
+
+2. 订阅（`QActive_subscribe()`）的信号 **只能通过 `QF_PUBLISH()` 投递（发布）**。
+    而 **`QACTIVE_POST()` 是直接发送给某一个活动对象的，不走订阅系统**。
+
+3. 静态事件和动态事件(事件池)
+
+   - 静态事件
+
+   ```c
+   static QEvt evt = {SIG_LED_TOGGLE, 0, 0};
+   QACTIVE_POST(AO_LED, &evt, 0);
+   ```
+
+   - 动态事件
+
+   ```c
+   QF_PoolInit(poolSto, poolSize, sizeof(MyEvt));
+   MyEvt *pe = QF_NEW(MyEvt, SIG_MY_EVENT);
+   QACTIVE_POST(AO, &pe->super, 0);// 或 QF_PUBLISH
+   ```
+
+   1. ==QTimeEvt_armX 400错误==：定时器**重复启动**导致断言失败 `Q_REQUIRE_ID(400, t->ctr == 0U);`
