@@ -6,8 +6,8 @@
     ],
     "settings": {
         "files.autoGuessEncoding": true,
+        "C_Cpp.intelliSenseEngine": "default",
         "C_Cpp.default.configurationProvider": "cl.eide",
-        "C_Cpp.errorSquiggles": "disabled",
         "files.associations": {
             ".eideignore": "ignore",
             "*.a51": "a51",
@@ -25,18 +25,7 @@
             "editor.tabSize": 4,
             "editor.autoIndent": "advanced"
         },
-        "terminal.integrated.shellIntegration.enabled": false,
-        "clangd.arguments": [
-            "-background-index",
-            "-j=1",
-            "--header-insertion=never",
-            "--completion-style=detailed",
-            "--header-insertion=iwyu",
-            "--suggest-missing-includes",
-            "--pretty",
-            "--clang-tidy",
-            "--compile-commands-dir=${workspaceFolder}/build/Debug",
-        ],
+
     },
     "extensions": {
         "recommendations": [

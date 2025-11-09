@@ -1,0 +1,164 @@
+version: "4.1"
+name: QPC_QV_Study
+type: ARM
+deviceName: null
+packDir: null
+srcDirs:
+  - User
+  - qpc
+virtualFolder:
+  name: <virtual_root>
+  files: []
+  folders:
+    - name: CMSIS
+      files:
+        - path: CMSIS/core_cm3.c
+        - path: CMSIS/core_cm3.h
+        - path: CMSIS/stm32f10x.h
+        - path: CMSIS/system_stm32f10x.c
+        - path: CMSIS/system_stm32f10x.h
+        - path: CMSIS/startup_stm32f10x_md.s
+      folders: []
+    - name: StdPeriph
+      files: []
+      folders:
+        - name: src
+          files:
+            - path: StdPeriph/src/misc.c
+            - path: StdPeriph/src/stm32f10x_adc.c
+            - path: StdPeriph/src/stm32f10x_bkp.c
+            - path: StdPeriph/src/stm32f10x_can.c
+            - path: StdPeriph/src/stm32f10x_cec.c
+            - path: StdPeriph/src/stm32f10x_crc.c
+            - path: StdPeriph/src/stm32f10x_dac.c
+            - path: StdPeriph/src/stm32f10x_dbgmcu.c
+            - path: StdPeriph/src/stm32f10x_dma.c
+            - path: StdPeriph/src/stm32f10x_exti.c
+            - path: StdPeriph/src/stm32f10x_flash.c
+            - path: StdPeriph/src/stm32f10x_fsmc.c
+            - path: StdPeriph/src/stm32f10x_gpio.c
+            - path: StdPeriph/src/stm32f10x_i2c.c
+            - path: StdPeriph/src/stm32f10x_iwdg.c
+            - path: StdPeriph/src/stm32f10x_pwr.c
+            - path: StdPeriph/src/stm32f10x_rcc.c
+            - path: StdPeriph/src/stm32f10x_rtc.c
+            - path: StdPeriph/src/stm32f10x_sdio.c
+            - path: StdPeriph/src/stm32f10x_spi.c
+            - path: StdPeriph/src/stm32f10x_tim.c
+            - path: StdPeriph/src/stm32f10x_usart.c
+            - path: StdPeriph/src/stm32f10x_wwdg.c
+          folders: []
+        - name: inc
+          files:
+            - path: StdPeriph/inc/misc.h
+            - path: StdPeriph/inc/stm32f10x_adc.h
+            - path: StdPeriph/inc/stm32f10x_bkp.h
+            - path: StdPeriph/inc/stm32f10x_can.h
+            - path: StdPeriph/inc/stm32f10x_cec.h
+            - path: StdPeriph/inc/stm32f10x_crc.h
+            - path: StdPeriph/inc/stm32f10x_dac.h
+            - path: StdPeriph/inc/stm32f10x_dbgmcu.h
+            - path: StdPeriph/inc/stm32f10x_dma.h
+            - path: StdPeriph/inc/stm32f10x_exti.h
+            - path: StdPeriph/inc/stm32f10x_flash.h
+            - path: StdPeriph/inc/stm32f10x_fsmc.h
+            - path: StdPeriph/inc/stm32f10x_gpio.h
+            - path: StdPeriph/inc/stm32f10x_i2c.h
+            - path: StdPeriph/inc/stm32f10x_iwdg.h
+            - path: StdPeriph/inc/stm32f10x_pwr.h
+            - path: StdPeriph/inc/stm32f10x_rcc.h
+            - path: StdPeriph/inc/stm32f10x_rtc.h
+            - path: StdPeriph/inc/stm32f10x_sdio.h
+            - path: StdPeriph/inc/stm32f10x_spi.h
+            - path: StdPeriph/inc/stm32f10x_tim.h
+            - path: StdPeriph/inc/stm32f10x_usart.h
+            - path: StdPeriph/inc/stm32f10x_wwdg.h
+          folders: []
+dependenceList: []
+outDir: build
+miscInfo:
+  uid: 9377629f6b81f246290b32ce33ac071d
+targets:
+  Debug:
+    cppPreprocessAttrs:
+      defineList:
+        - STM32F10X_MD
+        - USE_STDPERIPH_DRIVER
+        - __CC_ARM
+      incList:
+        - CMSIS
+        - StdPeriph/inc
+        - User/inc
+        - qpc/include
+        - qpc/ports/arm-cm/qv/arm
+        - qpc/src
+      libList: []
+    excludeList: []
+    toolchain: AC5
+    toolchainConfigMap:
+      AC5:
+        archExtensions: ""
+        cpuType: Cortex-M3
+        floatingPointHardware: none
+        options:
+          version: 4
+          afterBuildTasks: []
+          asm-compiler: {}
+          beforeBuildTasks: []
+          c/cpp-compiler:
+            CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
+            C_FLAGS: --diag_suppress=1 --diag_suppress=1295
+            c99-mode: true
+            one-elf-section-per-function: true
+            optimization: level-0
+            warnings: unspecified
+          global:
+            output-debug-info: enable
+            use-microLIB: true
+          linker:
+            output-format: elf
+        scatterFilePath: <YOUR_SCATTER_FILE>.sct
+        storageLayout:
+          RAM:
+            - id: 1
+              isChecked: true
+              mem:
+                size: "0x5000"
+                startAddr: "0x20000000"
+              noInit: false
+              tag: IRAM
+          ROM:
+            - id: 1
+              isChecked: true
+              isStartup: true
+              mem:
+                size: "0x10000"
+                startAddr: "0x08000000"
+              tag: IROM
+        useCustomScatterFile: false
+    uploadConfigMap:
+      JLink:
+        baseAddr: ""
+        bin: ""
+        cpuInfo:
+          cpuName: STM32F103C8
+          vendor: ST
+        otherCmds: ""
+        proType: 1
+        speed: 8000
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: stlink
+        target: stm32f1x
+      STLink:
+        address: "0x08000000"
+        bin: ""
+        elFile: None
+        optionBytes: .eide/debug.st.option.bytes.ini
+        otherCmds: ""
+        proType: SWD
+        resetMode: default
+        runAfterProgram: true
+        speed: 4000
+    uploader: JLink

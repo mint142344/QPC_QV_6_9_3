@@ -111,8 +111,9 @@ void QV_init(void)
     /* SCB_SYSPRI3:  SysTick, PendSV, Debug */
     SCB_SYSPRI[3] |= (QF_BASEPRI << 24) | (QF_BASEPRI << 16) | QF_BASEPRI;
 
-    /* set all implemented IRQ priories to QF_BASEPRI... */
+    // 从 SCnSCB_ICTR 寄存器读取已实现的 IRQ 数量
     n = 8U + ((*SCnSCB_ICTR & 0x7U) << 3); /* (# NVIC_PRIO registers)/4 */
+    /* set all implemented IRQ priories to QF_BASEPRI... */
     do {
         --n;
         NVIC_IP[n] = (QF_BASEPRI << 24) | (QF_BASEPRI << 16) | (QF_BASEPRI << 8) | QF_BASEPRI;

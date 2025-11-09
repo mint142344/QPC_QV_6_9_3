@@ -43,5 +43,10 @@ void QF_onCleanup(void)
 
 void QV_onIdle(void)
 {
-    QV_CPU_SLEEP();
+#if defined NDEBUG
+    /* Put the CPU and peripherals to the low-power mode */
+    QV_CPU_SLEEP(); /* atomically go to sleep and enable interrupts */
+#else
+    QF_INT_ENABLE(); /* just enable interrupts */
+#endif
 }
