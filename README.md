@@ -228,20 +228,23 @@ QP 框架在 ARM Cortex-M 处理器上采用了**选择性禁用中断**的策�
 
 
 
-# 集成
+# :star:集成
 
-集成qpc（qv）所需文件
+集成qpc（qv）所需文件(无qs软件跟踪	)
 
-**include**：
+`include`：
 
-**ports/arm-cm/qv/arm/**：
+`ports/arm-cm/qv/`：移植
 
-**src**：
+- `arm`：armcc编译器
+- `armclang`：armclang编译器
+- `gnu`：gcc_arm编译器
 
->  1. 用到事件 包含**"qep_port.h"** 而不是 **qep.h**
+`src`：
+
+>  1. 只包含`qpc.h`头文件即可
 >
-> 2. 用到活动对象 包含**"qpc.h"**
->3. **不需要修改qpc源代码文件**
+> 3. **不要修改qpc源代码文件**
 
 ## include
 
