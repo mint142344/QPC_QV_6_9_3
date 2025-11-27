@@ -487,7 +487,10 @@ void QMsm_dispatch_(QHsm *const me, QEvt const *const e);
 QStateHandler QMsm_getStateHandler_(QHsm *const me);
 #endif
 
-/*! 在状态处理函数中执行普通转换或初始转换时调用的宏, 仅适用于 ::QHsm 子类 */
+/**
+ * 在状态处理函数中执行普通转换或初始转换时调用的宏, 仅适用于 ::QHsm 子类
+ * 修改目标状态为target
+ */
 #define Q_TRAN(target_) \
     ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(target_), (QState)Q_RET_TRAN)
 
@@ -495,7 +498,10 @@ QStateHandler QMsm_getStateHandler_(QHsm *const me);
 #define Q_TRAN_HIST(hist_) \
     ((Q_HSM_UPCAST(me))->temp.fun = (hist_), (QState)Q_RET_TRAN_HIST)
 
-/*! 在状态处理函数中指定某个状态的超状态时调用的宏.  仅适用于 ::QHsm 子类 */
+/**
+ *  在状态处理函数中指定某个状态的超状态时调用的宏.  仅适用于 ::QHsm 子类
+ *  修改目标状态为super 
+ */
 #define Q_SUPER(super_) \
     ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(super_), (QState)Q_RET_SUPER)
 

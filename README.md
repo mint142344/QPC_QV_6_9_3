@@ -226,13 +226,15 @@ QP 框架在 ARM Cortex-M 处理器上采用了**选择性禁用中断**的策�
 - **第三方库风险：** 需警惕 STM32Cube 等第三方库可能会**意外更改**中断优先级和分组，建议在运行 QP 应用前将优先级改回适当的值。
 - **设置函数：** 应使用 CMSIS 提供的 `NVIC_SetPriority()` 函数来设置每个中断的优先级。请注意，**`NVIC_SetPriority()` 传入的值**与**最终存储在 NVIC 寄存器中的值（CMSIS priorities vs. NVIC values）**是不同的。
 
+# 3. 集成
 
+Arm Cortex M 裸机集成qpc（qv）所需文件(无qs软件跟踪)
 
-# :star:集成
+1. 只包含`qpc.h`头文件即可
 
-集成qpc（qv）所需文件(无qs软件跟踪	)
+2. **不要修改qpc源代码文件**
 
-`include`：
+3. 使用QPC提供的宏来操作活动对象，如QACTIVE_START、QACTIVE_POST、QF_TICK_X
 
 `ports/arm-cm/qv/`：移植
 
@@ -240,392 +242,15 @@ QP 框架在 ARM Cortex-M 处理器上采用了**选择性禁用中断**的策�
 - `armclang`：armclang编译器
 - `gnu`：gcc_arm编译器
 
-`src`：
-
->  1. 只包含`qpc.h`头文件即可
->
-> 2. **不要修改qpc源代码文件**
-# 3. 集成
-
-Arm Cortex M 裸机集成qpc（qv）所需文件
-
 <img src="./assets/image-20251111175330703.png" alt="image-20251111175330703" style="zoom: 67%;" />
 
-## include
+# 4.状态转换
 
-### qassert.h
+状态配置稳定：me->temp.fun == me->state.fun
 
-- 断言失败进入 Q_onAssert
-- `QACTIVE_START`内部使用了`Q_ASSERT`，所以必须调用`Q_DEFINE_THIS_FILE`或`Q_DEFINE_THIS_MODULE`
-
-```c
-#define Q_ASSERT(test_) ((test_) ? (void)0 : Q_onAssert(&Q_this_module_[0], __LINE__))
-```
-
-### qep.h
-
-```c
-typedef struct {
-    QSignal sig;              /*!< 事件实例的信号 */
-    uint8_t poolId_;          /*!< 所属事件池 ID（静态事件为 0）*/
-    uint8_t volatile refCtr_; /*!< 引用计数器 */
-} QEvt;
-
-// 修改目标状态为target
-#define Q_TRAN(target_)  \
-    ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(target_), (QState)Q_RET_TRAN)
-
-// 修改目标状态为super
-#define Q_SUPER(super_)  \
-    ((Q_HSM_UPCAST(me))->temp.fun = Q_STATE_CAST(super_), (QState)Q_RET_SUPER)
-```
-
-- `poolId_` 为0表示静态事件，此时`refCtr_`不用于引用计数
-
-### qequeue.h
-
-```c
-
-```
-
-### qf.h
-
-```c
-#include "qpset.h"
-```
-
-- QActive
-
-```c
-// 活动对象基类 (基于 ::QHsm 实现)
-struct QActive {
-    QHsm super;
-    QEQueue eQueue;
-    uint8_t prio;
-};
-
-// QActive 类虚表
-struct QActiveVtable {
-	// [virtual] 启动活动对象
-    void (*start)(QActive *const me, uint_fast8_t prio,
-                  QEvt const **const qSto, uint_fast16_t const qLen,
-                  void *const stkSto, uint_fast16_t const stkSize,
-                  void const *const par);
-    // [virtual] FIFO 异步发送事件给活动对象
-    bool (*post)(QActive *const me, QEvt const *const e,
-                 uint_fast16_t const margin);
-    // [virtual] LIFO 异步发送事件给活动对象
-    void (*postLIFO)(QActive *const me, QEvt const *const e);
-};
-
-
-// QM 建模工具使用
-typedef struct {
-    QActive super;
-} QMActive;
-typedef QActiveVtable QMActiveVtable;
-void QMActive_ctor(QMActive *const me, QStateHandler initial);
-
-
-// QTicker 是一个高效的活动对象, 专门用于以指定 tick 频率
-typedef struct {
-    QActive super; /*!< inherits ::QActive */
-} QTicker;
-void QTicker_ctor(QTicker *const me, uint_fast8_t tickRate);
-```
-
-public 函数
-
-```c
-// QActive public 虚函数调用
-#define QACTIVE_START(...)
-#define QACTIVE_POST(...)   	// 不会断言失败(FIFO)
-#define QACTIVE_POST_X(...) 	// 会断言失败(FIFO)
-#define QACTIVE_POST_LIFO(...)
-```
-
-protected 函数
-
-```c
-// QActive protected 函数
-void QActive_ctor(QActive *const me, QStateHandler initial);
-void QActive_stop(QActive *const me);
-
-// 订阅信号 @p sig, 以便传递给活动对象 @p me
-void QActive_subscribe(QActive const *const me, enum_t const sig);
-
-// 取消订阅信号 @p sig, 使其不再传递给活动对象 @p me
-void QActive_unsubscribe(QActive const *const me, enum_t const sig);
-
-// 取消订阅所有信号, 使其不再传递给活动对象 @p me
-void QActive_unsubscribeAll(QActive const *const me);
-
-// 将事件 @p e 延迟存储到指定的事件队列 @p eq 中
-bool QActive_defer(QActive const *const me, QEQueue *const eq, QEvt const *const e);
-
-// 从指定的事件队列 @p eq 中取回一个之前延迟的事件
-bool QActive_recall(QActive *const me, QEQueue *const eq);
-
-// 清空指定的延迟队列 @p eq
-uint_fast16_t QActive_flushDeferred(QActive const *const me, QEQueue *const eq);
-
-// 通用的附加属性设置 (useful in QP ports)
-void QActive_setAttr(QActive *const me, uint32_t attr1, void const *attr2);
-```
-
-- QTimeEvt 事件事件类
-
-```c
-typedef struct QTimeEvt {
-    QEvt super; 						// inherits ::QEvt
-    struct QTimeEvt *volatile next;		// 指向链表中下一个时间事件
-    void *volatile act;     			// 接收时间事件的活动对象
-    QTimeEvtCtr volatile ctr;    		// 计数器
-    QTimeEvtCtr interval;    			// 重载值
-} QTimeEvt;
-```
-
-public 函数
-
-```c
-// 构造函数, 初始化时间事件
-void QTimeEvt_ctorX(QTimeEvt *const me, QActive *const act,
-                    enum_t const sig, uint_fast8_t tickRate);
-
-// 启动一个时间事件(单次或周期性),并直接投递事件
-void QTimeEvt_armX(QTimeEvt *const me,
-                   QTimeEvtCtr const nTicks, QTimeEvtCtr const interval);
-
-// 重新启动一个时间事件
-bool QTimeEvt_rearm(QTimeEvt *const me, QTimeEvtCtr const nTicks);
-
-// 取消启动一个时间事件
-bool QTimeEvt_disarm(QTimeEvt *const me);
-
-// 检查时间事件是否"被取消"
-bool QTimeEvt_wasDisarmed(QTimeEvt *const me);
-
-// 获取时间事件当前的递减计数器值
-QTimeEvtCtr QTimeEvt_currCtr(QTimeEvt const *const me);
-```
-
-- QF facilities
-
-```c
-// 订阅列表
-typedef QPSet QSubscrList;
-
-/* public functions */
-void QF_init(void);
-
-/*! 发布-订阅机制初始化 */
-void QF_psInit(QSubscrList *const subscrSto, enum_t const maxSignal);
-
-/*! 事件池初始化，用于事件的动态分配 */
-void QF_poolInit(void *const poolSto, uint_fast32_t const poolSize, uint_fast16_t const evtSize);
-
-/*! 获取任意已注册事件池的块大小 */
-uint_fast16_t QF_poolGetMaxBlockSize(void);
-
-/*! 将控制权交给 QF 以运行应用程序 */
-int_t QF_run(void);
-
-/*! 应用层调用该函数以停止 QF 应用程序，并将控制权交还给 OS/内核 */
-void QF_stop(void);
-
-
-// QF 回调
-void QF_onStartup(void);
-void QF_onCleanup(void);
-
-
-// 事件发布
-void QF_publish_(QEvt const *const e);
-#define QF_PUBLISH(e_, dummy_) (QF_publish_(e_))
-
-
-// 在时钟节拍中处理事件事件
-void QF_tickX_(uint_fast8_t const tickRate);
-#define QF_TICK_X(tickRate_, dummy) (QF_tickX_(tickRate_))
-// 如果在指定的时钟速率下没有已启动的时间事件, 则返回 'true'
-bool QF_noTimeEvtsActiveX(uint_fast8_t const tickRate);
-
-
-/*! 注册一个活动对象，使其由框架管理 */
-void QF_add_(QActive *const a);
-
-/*! 将活动对象从框架中移除 */
-void QF_remove_(QActive *const a);
-
-/*! 获取指定事件池的最小剩余空闲条目数 */
-uint_fast16_t QF_getPoolMin(uint_fast8_t const poolId);
-
-/*! 获取指定事件队列的最小剩余空闲条目数 */
-uint_fast16_t QF_getQueueMin(uint_fast8_t const prio);
-
-
-/*! 内部 QF 实现: 创建新的动态事件 */
-QEvt *QF_newX_(uint_fast16_t const evtSize, uint_fast16_t const margin, enum_t const sig);
-// 分配一个动态事件 (断言版本)
-#define Q_NEW(evtT_, sig_)
-// 分配一个动态事件 (非断言版本)
-#define Q_NEW_X(e_, evtT_, margin_, sig_)
-
-/*! 内部 QF 实现: 创建新的事件引用 */
-QEvt const *QF_newRef_(QEvt const *const e, void const *const evtRef);
-/*! 内部 QF 实现: 删除事件引用 */
-void QF_deleteRef_(void const *const evtRef);
-// 创建当前事件 `e` 的新引用
-#define Q_NEW_REF(evtRef_, evtT_)
-// 删除事件引用
-#define Q_DELETE_REF(evtRef_)
-```
-
-
-
-### qmpool.h
-
-```c
-
-```
-
-### qpc.h
-
-```c
-#include "qf_port.h"      /* QF/C port from the port directory */
-#include "qassert.h"      /* QP embedded systems-friendly assertions */
-```
-
-### qpset.h
-
-```c
-
-```
-
-### qv.h
-
-协作式内核
-
-```c
-#include "qequeue.h"  /* QV kernel uses the native QP event queue  */
-#include "qmpool.h"   /* QV kernel uses the native QP memory pool  */
-#include "qpset.h"    /* QV kernel uses the native QP priority set */
-
-#define QF_EQUEUE_TYPE      QEQueue
-// QF_run() 中调用
-void QV_onIdle(void);
-
-/* QV 内核特有的调度器加锁机制 (但在 QV 中不需要) */
-#define QF_SCHED_STAT_
-#define QF_SCHED_LOCK_(dummy)   ((void)0)
-#define QF_SCHED_UNLOCK_(dummy) ((void)0)
-
-/* QF 原生事件队列操作 */
-#define QACTIVE_EQUEUE_WAIT_(me_) \
-    Q_ASSERT_ID(0, (me_)->eQueue.frontEvt != (QEvt *)0)
-
-#define QACTIVE_EQUEUE_SIGNAL_(me_) \
-    QPSet_insert(&QV_readySet_, (uint_fast8_t)(me_)->prio)
-
-
-
-/* QF 原生事件池操作 */
-#define QF_EPOOL_TYPE_ QMPool
-
-// QF_EPOOL_INIT_ 事件池初始化
-#define QF_EPOOL_INIT_(p_, poolSto_, poolSize_, evtSize_) \
-    (QMPool_init(&(p_), (poolSto_), (poolSize_), (evtSize_)))
-
-// QF_EPOOL_EVENT_SIZE_ 事件池大小
-#define QF_EPOOL_EVENT_SIZE_(p_) ((uint_fast16_t)(p_).blockSize)
-
-// QF_EPOOL_GET_	
-#define QF_EPOOL_GET_(p_, e_, m_, qs_id_) \
-    ((e_) = (QEvt *)QMPool_get(&(p_), (m_), (qs_id_)))
-    
-// QF_EPOOL_PUT_
-#define QF_EPOOL_PUT_(p_, e_, qs_id_) \
-    (QMPool_put(&(p_), (e_), (qs_id_)))
-```
-
-### qpc.h
-
-```c
-#include "qf_port.h"      /* QF/C port from the port directory */
-#include "qassert.h"      /* QP embedded systems-friendly assertions */
-```
-
-## ports
-
-移植目录
-
-### qep_port.h
-
-```c
-#include <stdint.h>  /* Exact-width types. WG14/N843 C99 Standard */
-#include <stdbool.h> /* Boolean type.      WG14/N843 C99 Standard */
-#include "qep.h"     /* QEP platform-independent public interface */
-```
-
-### qf_port.h
-
-```c
-#include "qep_port.h" /* QEP port */
-#include "qv_port.h"  /* QV cooperative kernel port */
-#include "qf.h"       /* QF platform-independent public interface */
-```
-
-宏  **QF_AWARE_ISR_CMSIS_PRI** 在应用程序中用于作为枚举"QF-aware"中断优先级的偏移量.
-
-"QF aware"的中断：
-
-- 优先级大于等于 **QF_AWARE_ISR_CMSIS_PRI** 
-- 可以调用 QF  服务
-
-"QF unaware"的中断：
-
-- 优先级小于 **QF_AWARE_ISR_CMSIS_PRI**
-- 不能调用任何 QF 服务
-
-### qv_port.h
-
-```c
-#include "qv.h" /* QV platform-independent public interface */
-```
-
-## src
-
-### qep_hsm.c
-
-```c
-// 保留事件
-static QEvt const QEP_reservedEvt_[] = {
-    { (QSignal)QEP_EMPTY_SIG_, 0U, 0U },
-    { (QSignal)Q_ENTRY_SIG,    0U, 0U },
-    { (QSignal)Q_EXIT_SIG,     0U, 0U },
-    { (QSignal)Q_INIT_SIG,     0U, 0U }
-};
-
-/** 在一个状态转换函数中执行 保留事件动作
- *	QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_)
- *	QEP_TRIG_(t, Q_INIT_SIG)
- */
-#define QEP_TRIG_(state_, sig_)	((*(state_))(me, &QEP_reservedEvt_[(sig_)]))
-
-// 状态处理函数执行退出动作Q_EXIT_SIG
-#define QEP_EXIT_(state_, qs_id_)	QEP_TRIG_(state_, Q_EXIT_SIG)
-
-// 状态处理函数执行进入动作Q_ENTRY_SIG
-#define QEP_ENTER_(state_, qs_id_)	QEP_TRIG_(state_, Q_ENTRY_SIG) 
-```
-
->  状态配置稳定：me->temp.fun == me->state.fun
-
-#### 转换规则
+## 转换规则
 
 LCA(最近公共祖先)不执行 ENTRY 和 EXIT 事件
-
-
 
 **自转换**：当状态机执行转换（Q_TRAN）到当前状态自身时，会发生以下顺序的动作：
 
@@ -633,37 +258,43 @@ LCA(最近公共祖先)不执行 ENTRY 和 EXIT 事件
 2. 执行目标状态（即自身）的 Q_ENTRY_SIG。
 3. 执行目标状态的 Q_INIT_SIG（如果
 
-
-
-### qv.c
-
-**QF_Init** 内部调用了 **QV_INIT**
-
-### qf_actq.c
-
-活动对象队列
-
-### qf_qact.c
-
-活动对象
-
-### qf_qep.c
-
-事件队列
-
-### qf_time.c
-
-```c
-// 启动定时器
-void QTimeEvt_armX(QTimeEvt * const me,
-                   QTimeEvtCtr const nTicks, QTimeEvtCtr const interval);
-```
-
-时间事件QTimEvt 是静态事件
-
 # Example:
 
+## 回调
+
+```c
+void Q_onAssert(char const *const module, int loc)
+{
+    for (;;) {
+    }
+}
+
+void QF_onCleanup(void)
+{
+}
+
+void QF_onStartup(void)
+{
+    // 为所有ISR设置优先级
+    NVIC_SetPriority(SysTick_IRQn, QF_AWARE_ISR_CMSIS_PRI);
+
+    // enable IRQs
+}
+
+void QV_onIdle(void)
+{
+#if defined NDEBUG
+    /* Put the CPU and peripherals to the low-power mode */
+    QV_CPU_SLEEP(); /* atomically go to sleep and enable interrupts */
+#else
+    QF_INT_ENABLE(); /* just enable interrupts */
+#endif
+}
+```
+
 ## QActive
+
+`QACTIVE_START`内部使用了`Q_ASSERT`，所以必须调用`Q_DEFINE_THIS_FILE`或`Q_DEFINE_THIS_MODULE`
 
 ## QTimeEvt
 
@@ -720,6 +351,27 @@ void StartActiveObjects(void)
 
    1. ==QTimeEvt_armX 400错误==：定时器**重复启动**导致断言失败 `Q_REQUIRE_ID(400, t->ctr == 0U);`
 
+   2. `QEvt::poolId_` 为0表示静态事件，此时`QEvt::refCtr_`不用于引用计数
+
 4. 使用QF_NO_MARGIN的函数会有断言失败机制
 
 5. 使用 QACTIVE_START 同文件必须定义 Q_DEFINE_THIS_FILE
+
+6. `QACTIVE_POST_X`会断言失败, `QACTIVE_POST`不会断言失败
+
+7. 宏  **QF_AWARE_ISR_CMSIS_PRI** 在应用程序中用于作为枚举"QF-aware"中断优先级的偏移量.
+
+   - "QF aware"的中断：
+
+     - 优先级大于等于 **QF_AWARE_ISR_CMSIS_PRI** 
+
+     - 可以调用 QF  服务
+
+   
+   - "QF unaware"的中断：
+   
+     - 优先级小于 **QF_AWARE_ISR_CMSIS_PRI**
+   
+     - 不能调用任何 QF 服务
+   
+

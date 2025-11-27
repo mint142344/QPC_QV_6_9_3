@@ -62,7 +62,7 @@ enum {
 };
 
 /**
- * @brief
+ * @brief 保留事件
  * 静态预分配的标准事件, QEP 事件处理器发送这些事件给 QHsm 风格的状态机的状态处理函数,
  * 用于执行入口动作, 退出动作和初始转换.
  */
@@ -72,11 +72,14 @@ static QEvt const QEP_reservedEvt_[] = {
     {(QSignal)Q_EXIT_SIG, 0U, 0U},
     {(QSignal)Q_INIT_SIG, 0U, 0U}};
 
-/*! 辅助宏, 在 HSM 中触发保留事件 */
+/** 在一个状态转换函数中执行 保留事件动作
+ *	QEP_TRIG_(me->temp.fun, QEP_EMPTY_SIG_)
+ *	QEP_TRIG_(t, Q_INIT_SIG)
+ */
 #define QEP_TRIG_(state_, sig_) \
     ((*(state_))(me, &QEP_reservedEvt_[(sig_)]))
 
-/*! 辅助宏, 在 HSM 中触发退出动作 */
+// 状态处理函数执行退出动作Q_EXIT_SIG
 #define QEP_EXIT_(state_, qs_id_)                                       \
     do {                                                                \
         if (QEP_TRIG_((state_), Q_EXIT_SIG) == (QState)Q_RET_HANDLED) { \
@@ -87,7 +90,7 @@ static QEvt const QEP_reservedEvt_[] = {
         }                                                               \
     } while (false)
 
-/*! 辅助宏, 在 HSM 中触发入口动作 */
+// 状态处理函数执行进入动作Q_ENTRY_SIG
 #define QEP_ENTER_(state_, qs_id_)                                       \
     do {                                                                 \
         if (QEP_TRIG_((state_), Q_ENTRY_SIG) == (QState)Q_RET_HANDLED) { \

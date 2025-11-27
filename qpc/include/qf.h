@@ -148,7 +148,7 @@ typedef struct QActive {
 typedef struct {
     struct QHsmVtable super; /*!< inherits ::QHsmVtable */
 
-    /*! [virtual] 启动活动对象 (线程) */
+    /*! [virtual] 启动活动对象 */
     void (*start)(QActive *const me, uint_fast8_t prio,
                   QEvt const **const qSto, uint_fast16_t const qLen,
                   void *const stkSto, uint_fast16_t const stkSize,
@@ -247,10 +247,12 @@ typedef struct {
                                                                    (e_), (margin_), (sender_)))
 #else
 
+// 不会断言失败(FIFO)
 #define QACTIVE_POST(me_, e_, sender_)                                    \
     ((void)(*((QActiveVtable const *)((Q_HSM_UPCAST(me_))->vptr))->post)( \
         (me_), (e_), QF_NO_MARGIN))
 
+// 会断言失败(FIFO)
 #define QACTIVE_POST_X(me_, e_, margin_, sender_)                   \
     ((*((QActiveVtable const *)((Q_HSM_UPCAST(me_))->vptr))->post)( \
         (me_), (e_), (margin_)))
