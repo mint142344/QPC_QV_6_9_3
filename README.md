@@ -228,7 +228,6 @@ QP 框架在 ARM Cortex-M 处理器上采用了**选择性禁用中断**的策�
 
 
 
-<<<<<<< Updated upstream
 # :star:集成
 
 集成qpc（qv）所需文件(无qs软件跟踪	)
@@ -251,13 +250,6 @@ QP 框架在 ARM Cortex-M 处理器上采用了**选择性禁用中断**的策�
 Arm Cortex M 裸机集成qpc（qv）所需文件
 
 <img src="./assets/image-20251111175330703.png" alt="image-20251111175330703" style="zoom: 67%;" />
-
-## 注意
-
-1. 任何地方用到QP的仅需包含qpc.h
-
-2. **不需要修改qpc源代码文件**
->>>>>>> Stashed changes
 
 ## include
 
@@ -668,6 +660,39 @@ void QTimeEvt_armX(QTimeEvt * const me,
 ```
 
 时间事件QTimEvt 是静态事件
+
+# Example:
+
+## QActive
+
+## QTimeEvt
+
+## QTicker
+
+```c
+// 设置最大Tick Rate 'QPC\ports\arm-cm\qv\arm\qf_port.h'
+#define QF_MAX_TICK_RATE        4U
+// QScreen.c
+void QScreen_Ctor(void)
+{
+    QScreen *const me = &l_screen;
+    QActive_ctor(&me->super, Q_STATE_CAST(&QScreen_initial));
+    QTimeEvt_ctorX(&me->timer, &me->super, SIG_SCREEN_TIMEOUT, 0);
+}
+// QMain.c
+static QTicker s_ticker0;
+QActive *AO_Ticker0 = &s_ticker0.super;
+void SysTick_Handler(void) {
+    // post a don't-care event to Ticker0
+    QACTIVE_POST(AO_Ticker0, 0, 0); // 等价于 QF_TICK_X(0U, 0);
+}
+void StartActiveObjects(void)
+{
+    uint8_t priority = 1;
+    QTicker_ctor(&s_ticker0, 3); // ticker AO for tick rate 0
+    QACTIVE_START(AO_Ticker0, priority++, 0, 0, 0, 0, 0);
+}
+```
 
 # NOTE
 

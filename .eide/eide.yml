@@ -93,7 +93,9 @@ targets:
         - qpc/ports/arm-cm/qv/arm
         - qpc/src
       libList: []
-    excludeList: []
+    excludeList:
+      - qpc/ports/arm-cm/qv/armclang
+      - qpc/ports/arm-cm/qv/gnu
     toolchain: AC5
     toolchainConfigMap:
       AC5:
