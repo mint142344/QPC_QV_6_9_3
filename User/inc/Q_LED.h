@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qpc.h"
+#include <qpc.h>
 
 typedef struct QLED {
     QActive super;

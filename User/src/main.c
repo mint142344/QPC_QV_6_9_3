@@ -1,7 +1,5 @@
 #include "Q_Main.h"
 
-#include "qpc.h"
-
 #include "spi.h"
 #include "uart.h"
 #include "led.h"

@@ -155,10 +155,10 @@ typedef struct {
                   void const *const par);
 
 #ifdef Q_SPY
-    /*! [virtual] 异步将事件 (以FIFO方式) post 到活动对象 */
     bool (*post)(QActive *const me, QEvt const *const e,
                  uint_fast16_t const margin, void const *const sender);
 #else
+    /*! [virtual] 异步将事件 (以FIFO方式) post 到活动对象 */
     bool (*post)(QActive *const me, QEvt const *const e,
                  uint_fast16_t const margin);
 #endif

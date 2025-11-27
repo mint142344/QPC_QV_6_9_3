@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qep_port.h"
+#include <qpc.h>
 
 typedef enum Signal {
     SIG_DUMMY = Q_USER_SIG,

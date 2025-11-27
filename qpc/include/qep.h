@@ -254,7 +254,9 @@ struct QHsmVtable {
     /*! 获取 HSM 的当前状态处理函数 */
     QStateHandler (*getStateHandler)(QHsm *const me);
 #else
+    /*! 触发 HSM 的最顶层初始转换 */
     void (*init)(QHsm *const me, void const *const e);
+    /*! 向 HSM 分发事件 */
     void (*dispatch)(QHsm *const me, QEvt const *const e);
 #endif /* Q_SPY */
 };

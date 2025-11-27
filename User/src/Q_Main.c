@@ -1,7 +1,7 @@
 #include "Q_Main.h"
 #include "Q_LED.h"
 
-#include "stm32f10x.h"
+#include <stm32f10x.h>
 #include <stdio.h>
 
 static QEvt const *s_led_events[10]; // LED 事件队列

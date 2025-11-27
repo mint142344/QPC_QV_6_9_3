@@ -1,7 +1,7 @@
 #include "led.h"
 
-#include "stm32f10x.h"
-#include "stm32f10x_gpio.h"
+#include <stm32f10x.h>
+#include <stm32f10x_gpio.h>
 
 #define LED_GREEN_PIN GPIO_Pin_0
 #define LED_RED_PIN   GPIO_Pin_1

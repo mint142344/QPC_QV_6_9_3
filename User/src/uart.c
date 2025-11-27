@@ -1,6 +1,6 @@
 #include "uart.h"
-#include "misc.h"
-#include "stm32f10x_gpio.h"
+#include <misc.h>
+#include <stm32f10x_gpio.h>
 
 #include <stdio.h>
 
